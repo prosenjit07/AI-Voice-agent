@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Audio Streaming Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .status.connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status.disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .controls {
+            margin: 20px 0;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .message-area {
+            margin: 20px 0;
+        }
+        #messageInput {
+            width: 70%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        #sendButton {
+            width: 25%;
+            padding: 10px;
+        }
+        .log {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .log-entry {
+            margin: 2px 0;
+            padding: 2px;
+        }
+        .log-entry.sent {
+            color: #0056b3;
+        }
+        .log-entry.received {
+            color: #155724;
+        }
+        .log-entry.error {
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Real-Time Audio Streaming Test</h1>
+        
+        <div id="status" class="status disconnected">
+            Disconnected
+        </div>
+        
+        <div class="controls">
+            <button id="connectButton" onclick="connect()">Connect</button>
+            <button id="disconnectButton" onclick="disconnect()" disabled>Disconnect</button>
+            <button id="pingButton" onclick="sendPing()" disabled>Send Ping</button>
+            <button id="statusButton" onclick="requestStatus()" disabled>Request Status</button>
+        </div>
+        
+        <div class="message-area">
+            <input type="text" id="messageInput" placeholder="Enter message to send..." disabled>
+            <button id="sendButton" onclick="sendMessage()" disabled>Send</button>
+        </div>
+        
+        <div>
+            <h3>Connection Log</h3>
+            <div id="log" class="log">
+                <div class="log-entry">Ready to connect...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let isConnected = false;
+
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function updateStatus(connected) {
+            isConnected = connected;
+            const statusDiv = document.getElementById('status');
+            const connectButton = document.getElementById('connectButton');
+            const disconnectButton = document.getElementById('disconnectButton');
+            const pingButton = document.getElementById('pingButton');
+            const statusButton = document.getElementById('statusButton');
+            const messageInput = document.getElementById('messageInput');
+            const sendButton = document.getElementById('sendButton');
+
+            if (connected) {
+                statusDiv.textContent = 'Connected';
+                statusDiv.className = 'status connected';
+                connectButton.disabled = true;
+                disconnectButton.disabled = false;
+                pingButton.disabled = false;
+                statusButton.disabled = false;
+                messageInput.disabled = false;
+                sendButton.disabled = false;
+            } else {
+                statusDiv.textContent = 'Disconnected';
+                statusDiv.className = 'status disconnected';
+                connectButton.disabled = false;
+                disconnectButton.disabled = true;
+                pingButton.disabled = true;
+                statusButton.disabled = true;
+                messageInput.disabled = true;
+                sendButton.disabled = true;
+            }
+        }
+
+        function connect() {
+            const wsUrl = `ws://${window.location.host}/ws`;
+            log(`Connecting to ${wsUrl}...`);
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = function(event) {
+                log('WebSocket connection opened', 'received');
+                updateStatus(true);
+            };
+            
+            ws.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    log(`Received: ${JSON.stringify(data)}`, 'received');
+                } catch (e) {
+                    log(`Received: ${event.data}`, 'received');
+                }
+            };
+            
+            ws.onclose = function(event) {
+                log(`WebSocket connection closed (code: ${event.code})`, 'error');
+                updateStatus(false);
+            };
+            
+            ws.onerror = function(error) {
+                log(`WebSocket error: ${error}`, 'error');
+                updateStatus(false);
+            };
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                ws = null;
+                log('Disconnected by user');
+                updateStatus(false);
+            }
+        }
+
+        function sendPing() {
+            if (ws && isConnected) {
+                const message = {
+                    type: 'ping',
+                    timestamp: Date.now()
+                };
+                ws.send(JSON.stringify(message));
+                log(`Sent: ${JSON.stringify(message)}`, 'sent');
+            }
+        }
+
+        function requestStatus() {
+            if (ws && isConnected) {
+                const message = {
+                    type: 'status_request'
+                };
+                ws.send(JSON.stringify(message));
+                log(`Sent: ${JSON.stringify(message)}`, 'sent');
+            }
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const text = input.value.trim();
+            
+            if (text && ws && isConnected) {
+                const message = {
+                    type: 'text_input',
+                    text: text
+                };
+                ws.send(JSON.stringify(message));
+                log(`Sent: ${JSON.stringify(message)}`, 'sent');
+                input.value = '';
+            }
+        }
+
+        // Allow Enter key to send message
+        document.getElementById('messageInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        // Initialize
+        updateStatus(false);
+    </script>
+</body>
+</html>
