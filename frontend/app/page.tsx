@@ -249,10 +249,6 @@ export default function Home() {
             <div className="text-sm text-blue-700 space-y-1">
               <p>• "Open voice form" - Switch to the form tab</p>
               <p>• "Open voice stream" - Switch to the stream tab</p>
-              <p>• "My name is [name]" - Fill the name field</p>
-              <p>• "My email is [email]" - Fill the email field</p>
-              <p>• "My message is [message]" - Fill the message field</p>
-              <p>• "Submit" or "Send form" - Submit the form</p>
             </div>
           </div>
         </div>
@@ -281,10 +277,6 @@ export default function Home() {
 
           <TabsContent value="form" className="space-y-4">
             <Card>
-              <CardHeader>
-                <CardTitle>Voice-Controlled Form</CardTitle>
-                <CardDescription>Fill out the form using voice commands like "My name is John"</CardDescription>
-              </CardHeader>
               <CardContent>
                 <VoiceForm 
                   isConnected={isConnected} 
@@ -305,40 +297,7 @@ export default function Home() {
             <div className={`w-2 h-2 rounded-full mr-2 ${isConnected ? "bg-green-500" : "bg-red-500"}`} />
             {isConnected ? "Connected" : "Disconnected"}
           </div>
-          
-          {/* Test buttons for voice commands */}
-          <div className="flex justify-center space-x-2">
-            <button
-              onClick={() => {
-                addDebugMessage("Test button clicked: Open Form")
-                wsRef.current?.sendText("open voice form")
-                processVoiceCommand("open voice form")
-              }}
-              className="px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600"
-            >
-              Test: Open Form
-            </button>
-            <button
-              onClick={() => {
-                addDebugMessage("Test button clicked: Set Name")
-                wsRef.current?.sendText("my name is John Doe")
-                processVoiceCommand("my name is John Doe")
-              }}
-              className="px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600"
-            >
-              Test: Set Name
-            </button>
-            <button
-              onClick={() => {
-                addDebugMessage("Test button clicked: Set Email")
-                wsRef.current?.sendText("my email is john@example.com")
-                processVoiceCommand("my email is john@example.com")
-              }}
-              className="px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600"
-            >
-              Test: Set Email
-            </button>
-          </div>
+        
 
           {/* Debug messages */}
           <div className="mt-4 p-4 bg-gray-100 rounded-lg border">

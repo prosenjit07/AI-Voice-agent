@@ -10,6 +10,28 @@ import { Mic, Send, Check, MicOff, Volume2 } from "lucide-react"
 import { WebSocketService } from "@/utils/ws"
 import { AudioProcessor } from "@/utils/audio-processor"
 
+// Type declarations for Speech Recognition API
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  start(): void
+  stop(): void
+  onresult: ((event: any) => void) | null
+  onerror: ((event: any) => void) | null
+}
+
+interface SpeechRecognitionConstructor {
+  new (): SpeechRecognition
+}
+
+declare global {
+  interface Window {
+    SpeechRecognition: SpeechRecognitionConstructor
+    webkitSpeechRecognition: SpeechRecognitionConstructor
+  }
+}
+
 interface VoiceFormProps {
   isConnected: boolean
   webSocketService?: WebSocketService
@@ -38,7 +60,7 @@ export function VoiceForm({ isConnected, webSocketService, onVoiceCommand }: Voi
   const wsRef = useRef<WebSocketService | null>(null)
   const audioProcessorRef = useRef<AudioProcessor | null>(null)
   const animationFrameRef = useRef<number>()
-  const recognitionRef = useRef<any>(null)
+  const recognitionRef = useRef<SpeechRecognition | null>(null)
 
   // Expose methods to parent component
   const updateField = (field: keyof FormData, value: string) => {
