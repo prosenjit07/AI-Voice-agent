@@ -100,7 +100,7 @@ export class WebSocketService {
 
           case "voice_command_response":
             // Handle voice command responses from backend
-            console.log("Voice command response received:", message.response)
+            console.log("🔔 WebSocket received voice command response:", message.response)
             this.onVoiceCommandResponse?.(message.response)
             break
 

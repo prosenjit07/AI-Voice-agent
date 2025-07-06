@@ -8,9 +8,10 @@ import { AudioProcessor } from "@/utils/audio-processor"
 
 interface MicStreamProps {
   onConnectionChange?: (connected: boolean) => void
+  webSocketService?: WebSocketService
 }
 
-export function MicStream({ onConnectionChange }: MicStreamProps) {
+export function MicStream({ onConnectionChange, webSocketService }: MicStreamProps) {
   const [isRecording, setIsRecording] = useState(false)
   const [isConnected, setIsConnected] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -29,8 +30,12 @@ export function MicStream({ onConnectionChange }: MicStreamProps) {
   }, [])
 
   useEffect(() => {
-    // Initialize WebSocket service
-    wsRef.current = new WebSocketService()
+    // Use provided WebSocket service or create new one
+    if (webSocketService) {
+      wsRef.current = webSocketService
+    } else {
+      wsRef.current = new WebSocketService()
+    }
 
     wsRef.current.onConnectionChange = (connected) => {
       setIsConnected(connected)
@@ -65,20 +70,25 @@ export function MicStream({ onConnectionChange }: MicStreamProps) {
       setIsPlaying(false)
     }
 
-    // Connect to WebSocket immediately
-    console.log("Attempting to connect to WebSocket...")
-    wsRef.current.connect().catch((error) => {
-      console.error("Failed to connect to WebSocket:", error)
-    })
+    // Connect to WebSocket if not already connected
+    if (!webSocketService) {
+      console.log("Attempting to connect to WebSocket...")
+      wsRef.current.connect().catch((error) => {
+        console.error("Failed to connect to WebSocket:", error)
+      })
+    }
 
     return () => {
       stopRecording()
-      wsRef.current?.disconnect()
+      // Only disconnect if we created the WebSocket service
+      if (!webSocketService && wsRef.current) {
+        wsRef.current.disconnect()
+      }
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current)
       }
     }
-  }, [onConnectionChange])
+  }, [onConnectionChange, webSocketService])
 
   useEffect(() => {
     if (isRecording) {

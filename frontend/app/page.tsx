@@ -10,6 +10,7 @@ import { WebSocketService } from "@/utils/ws"
 export default function Home() {
   const [isConnected, setIsConnected] = useState(false)
   const [activeTab, setActiveTab] = useState("stream")
+  const [wsReady, setWsReady] = useState(false)
   const wsRef = useRef<WebSocketService | null>(null)
 
   useEffect(() => {
@@ -18,6 +19,9 @@ export default function Home() {
 
     wsRef.current.onConnectionChange = (connected) => {
       setIsConnected(connected)
+      if (connected) {
+        setWsReady(true)
+      }
     }
 
     wsRef.current.onTextReceived = (text) => {
@@ -60,7 +64,7 @@ export default function Home() {
   }
 
   const handleVoiceCommandResponse = (response: any) => {
-    console.log("Handling voice command response:", response)
+    console.log("🎯 Main page received voice command response:", response)
     
     // Get the voice form instance once
     const voiceForm = (window as any).voiceForm
@@ -141,7 +145,10 @@ export default function Home() {
                 <CardDescription>Start speaking to interact with Gemini Live AI</CardDescription>
               </CardHeader>
               <CardContent>
-                <MicStream onConnectionChange={setIsConnected} />
+                <MicStream 
+                  onConnectionChange={setIsConnected} 
+                  webSocketService={wsReady ? wsRef.current : undefined}
+                />
               </CardContent>
             </Card>
           </TabsContent>

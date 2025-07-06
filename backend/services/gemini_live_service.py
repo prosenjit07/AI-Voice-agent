@@ -188,9 +188,11 @@ class GeminiLiveService:
                         Be conversational and confirm each action. Respond naturally through voice."""
                     }]
                 },
-                "tools": {
-                    "function_declarations": self._get_function_declarations()
-                }
+                "tools": [
+                    {
+                        "function_declarations": self._get_function_declarations()
+                    }
+                ]
             }
             
             # Use the async context manager correctly

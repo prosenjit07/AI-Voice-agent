@@ -1,0 +1,5 @@
+uv run uvicorn main:app --host 0.0.0.0 --port 5050
+
+
+//test websocket
+curl -i -N -H "Connection: Upgrade" -H "Upgrade: websocket" -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: x3JJHMbDL1EzLkh9GBhXDw==" http://localhost:5050/ws

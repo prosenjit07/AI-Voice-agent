@@ -4,6 +4,7 @@ WebSocket routes for real-time audio streaming
 import asyncio
 import json
 import logging
+import re
 from typing import Dict, Any
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.websockets import WebSocketState
@@ -18,7 +19,7 @@ websocket_router = APIRouter()
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, WebSocket] = {}
-        self.pipelines: Dict[str, LowLatencyLowLatencyAudioPipeline] = {}
+        self.pipelines: Dict[str, LowLatencyAudioPipeline] = {}
     
     async def connect(self, websocket: WebSocket, client_id: str):
         """Accept WebSocket connection"""
@@ -65,6 +66,108 @@ class ConnectionManager:
 # Global connection manager
 manager = ConnectionManager()
 
+async def process_voice_command(text: str) -> Dict[str, Any]:
+    """Process voice commands locally without requiring Gemini API"""
+    try:
+        lower_text = text.lower().strip()
+        logger.info(f"Processing voice command: {text}")
+        
+        # Tab switching commands
+        if any(phrase in lower_text for phrase in ["open voice form", "switch to form", "go to form", "show form"]):
+            return {
+                "action": "switch_tab",
+                "tab": "form",
+                "message": "Switching to Voice Form tab"
+            }
+        
+        if any(phrase in lower_text for phrase in ["open voice stream", "switch to stream", "go to stream", "show stream"]):
+            return {
+                "action": "switch_tab", 
+                "tab": "stream",
+                "message": "Switching to Voice Stream tab"
+            }
+        
+        # Form filling commands
+        name_patterns = [
+            r"(?:my name is|i am|i'm|name is|call me)\s+([a-zA-Z\s]+)",
+            r"(?:set name to|put name as)\s+([a-zA-Z\s]+)",
+            r"(?:name)\s+([a-zA-Z\s]+)"
+        ]
+        
+        for pattern in name_patterns:
+            match = re.search(pattern, lower_text)
+            if match:
+                name = match.group(1).strip()
+                return {
+                    "action": "fill_field",
+                    "field": "name",
+                    "value": name,
+                    "message": f"Setting name to {name}"
+                }
+        
+        email_patterns = [
+            r"(?:my email is|email is|my email address is|email address)\s+([^\s]+@[^\s]+\.[^\s]+)",
+            r"(?:set email to|put email as)\s+([^\s]+@[^\s]+\.[^\s]+)",
+            r"(?:email)\s+([^\s]+@[^\s]+\.[^\s]+)"
+        ]
+        
+        for pattern in email_patterns:
+            match = re.search(pattern, lower_text)
+            if match:
+                email = match.group(1).strip()
+                return {
+                    "action": "fill_field",
+                    "field": "email", 
+                    "value": email,
+                    "message": f"Setting email to {email}"
+                }
+        
+        message_patterns = [
+            r"(?:my message is|message is|i want to say|tell them)\s+(.+)",
+            r"(?:set message to|put message as)\s+(.+)",
+            r"(?:message)\s+(.+)"
+        ]
+        
+        for pattern in message_patterns:
+            match = re.search(pattern, lower_text)
+            if match:
+                message = match.group(1).strip()
+                return {
+                    "action": "fill_field",
+                    "field": "message",
+                    "value": message,
+                    "message": f"Setting message to {message}"
+                }
+        
+        # Submit commands
+        submit_patterns = ["submit", "send form", "send it", "submit form", "send the form", "i'm done", "finished", "complete", "done"]
+        if any(pattern in lower_text for pattern in submit_patterns):
+            return {
+                "action": "submit_form",
+                "message": "Submit the form"
+            }
+        
+        # Clear commands
+        clear_patterns = ["clear", "reset", "clear form", "reset form", "start over", "clear all", "reset all", "clear everything"]
+        if any(pattern in lower_text for pattern in clear_patterns):
+            return {
+                "action": "clear_form",
+                "message": "Clear the form"
+            }
+        
+        # No matching command found
+        return {
+            "action": "unknown",
+            "message": f"No matching command found for: {text}"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error processing voice command: {e}")
+        return {
+            "action": "error",
+            "message": f"Error processing command: {str(e)}"
+        }
+
 @websocket_router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """
@@ -84,7 +187,7 @@ async def websocket_endpoint(websocket: WebSocket):
         manager.active_connections[client_id] = websocket
         
         # Create and initialize audio pipeline
-        pipeline = LowLatencyLowLatencyAudioPipeline()
+        pipeline = LowLatencyAudioPipeline()
         await pipeline.initialize(websocket)
         manager.pipelines[client_id] = pipeline
         
@@ -190,7 +293,24 @@ async def handle_text_message(data: Dict[str, Any], pipeline: LowLatencyAudioPip
             # Handle text input
             text = data.get("text", "")
             if text:
-                await pipeline.process_text_input(text)
+                # Process voice commands locally
+                response = await process_voice_command(text)
+                logger.info(f"Sending voice command response: {response}")
+                await websocket.send_json({
+                    "type": "voice_command_response",
+                    "command": text,
+                    "response": response,
+                    "timestamp": asyncio.get_event_loop().time()
+                })
+                logger.info("Voice command response sent successfully")
+                
+                # Only send to Gemini if the local command wasn't recognized
+                if not response or response.get("action") == "unknown":
+                    logger.info("Local command not recognized, sending to Gemini")
+                    await pipeline.process_text_input(text)
+                else:
+                    logger.info("Local command recognized, skipping Gemini")
+                
                 await websocket.send_json({
                     "type": "text_received",
                     "text": text,
