@@ -87,24 +87,7 @@ async def process_voice_command(text: str) -> Dict[str, Any]:
                 "message": "Switching to Voice Stream tab"
             }
         
-        # Form filling commands
-        name_patterns = [
-            r"(?:my name is|i am|i'm|name is|call me)\s+([a-zA-Z\s]+)",
-            r"(?:set name to|put name as)\s+([a-zA-Z\s]+)",
-            r"(?:name)\s+([a-zA-Z\s]+)"
-        ]
-        
-        for pattern in name_patterns:
-            match = re.search(pattern, lower_text)
-            if match:
-                name = match.group(1).strip()
-                return {
-                    "action": "fill_field",
-                    "field": "name",
-                    "value": name,
-                    "message": f"Setting name to {name}"
-                }
-        
+        # Form filling commands - check email first (most specific)
         email_patterns = [
             r"(?:my email is|email is|my email address is|email address)\s+([^\s]+@[^\s]+\.[^\s]+)",
             r"(?:set email to|put email as)\s+([^\s]+@[^\s]+\.[^\s]+)",
@@ -115,6 +98,7 @@ async def process_voice_command(text: str) -> Dict[str, Any]:
             match = re.search(pattern, lower_text)
             if match:
                 email = match.group(1).strip()
+                logger.info(f"EMAIL PATTERN MATCHED: {pattern} -> {email}")
                 return {
                     "action": "fill_field",
                     "field": "email", 
@@ -122,6 +106,7 @@ async def process_voice_command(text: str) -> Dict[str, Any]:
                     "message": f"Setting email to {email}"
                 }
         
+        # Check message patterns (more specific than name)
         message_patterns = [
             r"(?:my message is|message is|i want to say|tell them)\s+(.+)",
             r"(?:set message to|put message as)\s+(.+)",
@@ -137,6 +122,25 @@ async def process_voice_command(text: str) -> Dict[str, Any]:
                     "field": "message",
                     "value": message,
                     "message": f"Setting message to {message}"
+                }
+        
+        # Check name patterns last (most general)
+        name_patterns = [
+            r"(?:my name is|i am|i'm|name is|call me)\s+([a-zA-Z\s]+)",
+            r"(?:set name to|put name as)\s+([a-zA-Z\s]+)",
+            r"(?:^name\s+)([a-zA-Z\s]+)"  # Only match "name" at the beginning
+        ]
+        
+        for pattern in name_patterns:
+            match = re.search(pattern, lower_text)
+            if match:
+                name = match.group(1).strip()
+                logger.info(f"NAME PATTERN MATCHED: {pattern} -> {name}")
+                return {
+                    "action": "fill_field",
+                    "field": "name",
+                    "value": name,
+                    "message": f"Setting name to {name}"
                 }
         
         # Submit commands

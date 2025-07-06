@@ -9,17 +9,20 @@ import { AudioProcessor } from "@/utils/audio-processor"
 interface MicStreamProps {
   onConnectionChange?: (connected: boolean) => void
   webSocketService?: WebSocketService
+  onVoiceCommand?: (command: string) => void
 }
 
-export function MicStream({ onConnectionChange, webSocketService }: MicStreamProps) {
+export function MicStream({ onConnectionChange, webSocketService, onVoiceCommand }: MicStreamProps) {
   const [isRecording, setIsRecording] = useState(false)
   const [isConnected, setIsConnected] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
   const [volume, setVolume] = useState(0)
+  const [recognizedText, setRecognizedText] = useState("")
 
   const wsRef = useRef<WebSocketService | null>(null)
   const audioProcessorRef = useRef<AudioProcessor | null>(null)
   const animationFrameRef = useRef<number>()
+  const recognitionRef = useRef<any>(null)
 
   const updateVolume = useCallback(() => {
     if (audioProcessorRef.current) {
@@ -30,6 +33,35 @@ export function MicStream({ onConnectionChange, webSocketService }: MicStreamPro
   }, [])
 
   useEffect(() => {
+    // Initialize speech recognition
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+      recognitionRef.current = new SpeechRecognition()
+      recognitionRef.current.continuous = false
+      recognitionRef.current.interimResults = false
+      recognitionRef.current.lang = 'en-US'
+      
+      recognitionRef.current.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript
+        setRecognizedText(transcript)
+        console.log("🎤 Speech recognized:", transcript)
+        
+        // Send to WebSocket for voice command processing
+        if (wsRef.current && wsRef.current.isConnected()) {
+          wsRef.current.sendText(transcript)
+        }
+        
+        // Call the voice command callback
+        onVoiceCommand?.(transcript)
+      }
+      
+      recognitionRef.current.onerror = (event: any) => {
+        console.error("Speech recognition error:", event.error)
+      }
+    } else {
+      console.warn("Speech recognition not supported in this browser")
+    }
+
     // Use provided WebSocket service or create new one
     if (webSocketService) {
       wsRef.current = webSocketService
@@ -103,6 +135,12 @@ export function MicStream({ onConnectionChange, webSocketService }: MicStreamPro
     try {
       await audioProcessorRef.current?.startRecording()
       setIsRecording(true)
+      
+      // Start speech recognition
+      if (recognitionRef.current) {
+        recognitionRef.current.start()
+        console.log("🎤 Speech recognition started")
+      }
     } catch (error) {
       console.error("Failed to start recording:", error)
       alert("Failed to access microphone. Please check permissions.")
@@ -112,6 +150,12 @@ export function MicStream({ onConnectionChange, webSocketService }: MicStreamPro
   const stopRecording = () => {
     audioProcessorRef.current?.stopRecording()
     setIsRecording(false)
+    
+    // Stop speech recognition
+    if (recognitionRef.current) {
+      recognitionRef.current.stop()
+      console.log("🎤 Speech recognition stopped")
+    }
   }
 
   const toggleRecording = () => {
@@ -173,6 +217,15 @@ export function MicStream({ onConnectionChange, webSocketService }: MicStreamPro
           <div className="flex items-center space-x-2">
             <Volume2 className="w-5 h-5 text-blue-600 animate-pulse" />
             <span className="text-blue-800 font-medium">AI is speaking...</span>
+          </div>
+        </div>
+      )}
+
+      {recognizedText && (
+        <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+          <div className="flex items-center space-x-2">
+            <Mic className="w-5 h-5 text-green-600" />
+            <span className="text-green-800 font-medium">Recognized: "{recognizedText}"</span>
           </div>
         </div>
       )}

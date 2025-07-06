@@ -6,10 +6,14 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "@/components/ui/card"
-import { Mic, Send, Check } from "lucide-react"
+import { Mic, Send, Check, MicOff, Volume2 } from "lucide-react"
+import { WebSocketService } from "@/utils/ws"
+import { AudioProcessor } from "@/utils/audio-processor"
 
 interface VoiceFormProps {
   isConnected: boolean
+  webSocketService?: WebSocketService
+  onVoiceCommand?: (command: string) => void
 }
 
 interface FormData {
@@ -18,7 +22,7 @@ interface FormData {
   message: string
 }
 
-export function VoiceForm({ isConnected }: VoiceFormProps) {
+export function VoiceForm({ isConnected, webSocketService, onVoiceCommand }: VoiceFormProps) {
   const [formData, setFormData] = useState<FormData>({
     name: "",
     email: "",
@@ -27,6 +31,14 @@ export function VoiceForm({ isConnected }: VoiceFormProps) {
   const [isListening, setIsListening] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [lastCommand, setLastCommand] = useState("")
+  const [recognizedText, setRecognizedText] = useState("")
+  const [volume, setVolume] = useState(0)
+  const [isPlaying, setIsPlaying] = useState(false)
+
+  const wsRef = useRef<WebSocketService | null>(null)
+  const audioProcessorRef = useRef<AudioProcessor | null>(null)
+  const animationFrameRef = useRef<number>()
+  const recognitionRef = useRef<any>(null)
 
   // Expose methods to parent component
   const updateField = (field: keyof FormData, value: string) => {
@@ -58,6 +70,111 @@ export function VoiceForm({ isConnected }: VoiceFormProps) {
     }
   }, [])
 
+  // Initialize speech recognition and audio processing
+  useEffect(() => {
+    // Initialize speech recognition
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+      recognitionRef.current = new SpeechRecognition()
+      recognitionRef.current.continuous = false
+      recognitionRef.current.interimResults = false
+      recognitionRef.current.lang = 'en-US'
+      
+      recognitionRef.current.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript
+        setRecognizedText(transcript)
+        setLastCommand(transcript)
+        console.log("🎤 VoiceForm: Speech recognized:", transcript)
+        
+        // Send to WebSocket for voice command processing
+        if (wsRef.current && wsRef.current.isConnected()) {
+          wsRef.current.sendText(transcript)
+        }
+        
+        // Call the voice command callback
+        onVoiceCommand?.(transcript)
+      }
+      
+      recognitionRef.current.onerror = (event: any) => {
+        console.error("VoiceForm: Speech recognition error:", event.error)
+      }
+    } else {
+      console.warn("Speech recognition not supported in this browser")
+    }
+
+    // Use provided WebSocket service or create new one
+    if (webSocketService) {
+      wsRef.current = webSocketService
+    } else {
+      wsRef.current = new WebSocketService()
+    }
+
+    wsRef.current.onAudioReceived = (audioData) => {
+      setIsPlaying(true)
+      // Stop recording when receiving audio (turn-taking)
+      if (isListening) {
+        stopListening()
+      }
+
+      // Play received audio
+      audioProcessorRef.current?.playAudio(audioData).then(() => {
+        setIsPlaying(false)
+      })
+    }
+
+    // Initialize audio processor
+    audioProcessorRef.current = new AudioProcessor()
+
+    audioProcessorRef.current.onAudioData = (audioData) => {
+      if (wsRef.current && isConnected) {
+        wsRef.current.sendAudio(audioData)
+      }
+    }
+
+    audioProcessorRef.current.onSpeechStart = () => {
+      // Interrupt playback when user starts speaking
+      audioProcessorRef.current?.stopPlayback()
+      setIsPlaying(false)
+    }
+
+    // Connect to WebSocket if not already connected
+    if (!webSocketService) {
+      console.log("VoiceForm: Attempting to connect to WebSocket...")
+      wsRef.current.connect().catch((error) => {
+        console.error("VoiceForm: Failed to connect to WebSocket:", error)
+      })
+    }
+
+    return () => {
+      stopListening()
+      // Only disconnect if we created the WebSocket service
+      if (!webSocketService && wsRef.current) {
+        wsRef.current.disconnect()
+      }
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current)
+      }
+    }
+  }, [onVoiceCommand, webSocketService, isConnected])
+
+  // Volume indicator update
+  useEffect(() => {
+    const updateVolume = () => {
+      if (audioProcessorRef.current) {
+        const currentVolume = audioProcessorRef.current.getVolume()
+        setVolume(currentVolume)
+      }
+      animationFrameRef.current = requestAnimationFrame(updateVolume)
+    }
+
+    if (isListening) {
+      updateVolume()
+    } else if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current)
+      setVolume(0)
+    }
+  }, [isListening])
+
   const handleSubmit = () => {
     if (formData.name && formData.email && formData.message) {
       console.log("Form submitted:", formData)
@@ -74,14 +191,112 @@ export function VoiceForm({ isConnected }: VoiceFormProps) {
       return
     }
 
-    setIsListening(true)
-    // In a real implementation, this would start audio capture
-    // For now, we'll simulate it
-    setTimeout(() => setIsListening(false), 3000)
+    try {
+      await audioProcessorRef.current?.startRecording()
+      setIsListening(true)
+      
+      // Start speech recognition
+      if (recognitionRef.current) {
+        recognitionRef.current.start()
+        console.log("🎤 VoiceForm: Speech recognition started")
+      }
+    } catch (error) {
+      console.error("VoiceForm: Failed to start recording:", error)
+      alert("Failed to access microphone. Please check permissions.")
+    }
   }
+
+  const stopListening = () => {
+    audioProcessorRef.current?.stopRecording()
+    setIsListening(false)
+    
+    // Stop speech recognition
+    if (recognitionRef.current) {
+      recognitionRef.current.stop()
+      console.log("🎤 VoiceForm: Speech recognition stopped")
+    }
+  }
+
+  const toggleListening = () => {
+    if (isListening) {
+      stopListening()
+    } else {
+      startListening()
+    }
+  }
+
+  const VolumeIndicator = () => (
+    <div className="flex items-center space-x-2">
+      <div className="flex space-x-1">
+        {[...Array(10)].map((_, i) => (
+          <div
+            key={i}
+            className={`w-1 h-6 rounded-full transition-colors duration-100 ${
+              volume * 10 > i ? "bg-green-500" : "bg-gray-200"
+            }`}
+          />
+        ))}
+      </div>
+      <span className="text-sm text-gray-600 min-w-[3rem]">{Math.round(volume * 100)}%</span>
+    </div>
+  )
 
   return (
     <div className="space-y-6">
+      {/* Voice Input Section */}
+      <Card className="bg-blue-50 border-blue-200">
+        <CardContent className="pt-6">
+          <div className="flex flex-col items-center space-y-4">
+            <Button
+              onClick={toggleListening}
+              disabled={!isConnected}
+              size="lg"
+              className={`w-16 h-16 rounded-full transition-all duration-200 ${
+                isListening ? "bg-red-500 hover:bg-red-600 animate-pulse" : "bg-blue-500 hover:bg-blue-600"
+              }`}
+            >
+              {isListening ? <MicOff className="w-6 h-6 text-white" /> : <Mic className="w-6 h-6 text-white" />}
+            </Button>
+
+            <div className="text-center">
+              <p className="text-lg font-medium text-blue-800">
+                {isListening ? "Listening for voice commands..." : "Click to start voice input"}
+              </p>
+              <p className="text-sm text-blue-600">
+                {isConnected ? "Ready for voice commands" : "Connecting..."}
+              </p>
+            </div>
+
+            {isListening && (
+              <div className="w-full max-w-xs">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-blue-700">Microphone Level</span>
+                  <Mic className="w-4 h-4 text-blue-500" />
+                </div>
+                <VolumeIndicator />
+              </div>
+            )}
+
+            {isPlaying && (
+              <div className="flex items-center space-x-2 text-blue-700">
+                <Volume2 className="w-5 h-5 animate-pulse" />
+                <span className="font-medium">AI is speaking...</span>
+              </div>
+            )}
+
+            {recognizedText && (
+              <div className="w-full max-w-xs bg-white rounded-lg p-3 border border-green-200">
+                <div className="flex items-center space-x-2">
+                  <Mic className="w-4 h-4 text-green-600" />
+                  <span className="text-green-800 text-sm">"{recognizedText}"</span>
+                </div>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Form Fields */}
       <div className="grid gap-4">
         <div className="space-y-2">
           <Label htmlFor="name">Name</Label>
@@ -121,16 +336,6 @@ export function VoiceForm({ isConnected }: VoiceFormProps) {
 
       <div className="flex space-x-4">
         <Button
-          onClick={startListening}
-          disabled={!isConnected || isListening}
-          variant="outline"
-          className="flex-1 bg-transparent"
-        >
-          <Mic className={`w-4 h-4 mr-2 ${isListening ? "animate-pulse" : ""}`} />
-          {isListening ? "Listening..." : "Voice Fill"}
-        </Button>
-
-        <Button
           onClick={handleSubmit}
           disabled={!formData.name || !formData.email || !formData.message}
           className="flex-1"
@@ -153,7 +358,7 @@ export function VoiceForm({ isConnected }: VoiceFormProps) {
         <Card className="bg-blue-50 border-blue-200">
           <CardContent className="pt-4">
             <p className="text-sm text-blue-800">
-              <strong>Last command:</strong> {lastCommand}
+              <strong>Last voice command:</strong> {lastCommand}
             </p>
           </CardContent>
         </Card>

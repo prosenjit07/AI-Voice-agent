@@ -73,90 +73,90 @@ export default function Home() {
       return
     }
 
-    // Form field commands - only process if we're on the form tab
-    if (activeTab === "form") {
-      // Name extraction
-      const namePatterns = [
-        /(?:my name is|i am|i'm|name is|call me)\s+([a-zA-Z\s]+)/i,
-        /(?:set name to|put name as)\s+([a-zA-Z\s]+)/i,
-        /(?:name)\s+([a-zA-Z\s]+)/i
-      ]
-      
-      for (const pattern of namePatterns) {
-        const nameMatch = lowerCommand.match(pattern)
-        if (nameMatch) {
-          const name = nameMatch[1].trim()
-          addDebugMessage(`Setting name field to: ${name}`)
-          updateFormField("name", name)
-          console.log(`✅ Set name to: ${name}`)
-          return
-        }
+        // Form field commands - process regardless of current tab (for better UX)
+    // This allows voice commands to work even if user is on stream tab but wants to fill form
+    
+    // Name extraction
+    const namePatterns = [
+      /(?:my name is|i am|i'm|name is|call me)\s+([a-zA-Z\s]+)/i,
+      /(?:set name to|put name as)\s+([a-zA-Z\s]+)/i,
+      /(?:name)\s+([a-zA-Z\s]+)/i
+    ]
+    
+    for (const pattern of namePatterns) {
+      const nameMatch = lowerCommand.match(pattern)
+      if (nameMatch) {
+        const name = nameMatch[1].trim()
+        addDebugMessage(`Setting name field to: ${name}`)
+        updateFormField("name", name)
+        console.log(`✅ Set name to: ${name}`)
+        return
       }
+    }
 
-      // Email extraction
-      const emailPatterns = [
-        /(?:my email is|email is|my email address is|email address)\s+([^\s]+@[^\s]+\.[^\s]+)/i,
-        /(?:set email to|put email as)\s+([^\s]+@[^\s]+\.[^\s]+)/i,
-        /(?:email)\s+([^\s]+@[^\s]+\.[^\s]+)/i
-      ]
-      
-      for (const pattern of emailPatterns) {
-        const emailMatch = lowerCommand.match(pattern)
-        if (emailMatch) {
-          const email = emailMatch[1].trim()
-          addDebugMessage(`Setting email field to: ${email}`)
-          updateFormField("email", email)
-          console.log(`✅ Set email to: ${email}`)
-          return
-        }
+    // Email extraction
+    const emailPatterns = [
+      /(?:my email is|email is|my email address is|email address)\s+([^\s]+@[^\s]+\.[^\s]+)/i,
+      /(?:set email to|put email as)\s+([^\s]+@[^\s]+\.[^\s]+)/i,
+      /(?:email)\s+([^\s]+@[^\s]+\.[^\s]+)/i
+    ]
+    
+    for (const pattern of emailPatterns) {
+      const emailMatch = lowerCommand.match(pattern)
+      if (emailMatch) {
+        const email = emailMatch[1].trim()
+        addDebugMessage(`Setting email field to: ${email}`)
+        updateFormField("email", email)
+        console.log(`✅ Set email to: ${email}`)
+        return
       }
+    }
 
-      // Message extraction
-      const messagePatterns = [
-        /(?:my message is|message is|i want to say|tell them)\s+(.+)/i,
-        /(?:set message to|put message as)\s+(.+)/i,
-        /(?:message)\s+(.+)/i
-      ]
-      
-      for (const pattern of messagePatterns) {
-        const messageMatch = lowerCommand.match(pattern)
-        if (messageMatch) {
-          const message = messageMatch[1].trim()
-          addDebugMessage(`Setting message field to: ${message}`)
-          updateFormField("message", message)
-          console.log(`✅ Set message to: ${message}`)
-          return
-        }
+    // Message extraction
+    const messagePatterns = [
+      /(?:my message is|message is|i want to say|tell them)\s+(.+)/i,
+      /(?:set message to|put message as)\s+(.+)/i,
+      /(?:message)\s+(.+)/i
+    ]
+    
+    for (const pattern of messagePatterns) {
+      const messageMatch = lowerCommand.match(pattern)
+      if (messageMatch) {
+        const message = messageMatch[1].trim()
+        addDebugMessage(`Setting message field to: ${message}`)
+        updateFormField("message", message)
+        console.log(`✅ Set message to: ${message}`)
+        return
       }
+    }
 
-      // Submit command
-      const submitPatterns = [
-        /(?:submit|send form|send it|submit form|send the form)/i,
-        /(?:i'm done|finished|complete|done)/i
-      ]
-      
-      for (const pattern of submitPatterns) {
-        if (pattern.test(lowerCommand)) {
-          addDebugMessage("Submitting form")
-          submitForm()
-          console.log("✅ Submitting form")
-          return
-        }
+    // Submit command
+    const submitPatterns = [
+      /(?:submit|send form|send it|submit form|send the form)/i,
+      /(?:i'm done|finished|complete|done)/i
+    ]
+    
+    for (const pattern of submitPatterns) {
+      if (pattern.test(lowerCommand)) {
+        addDebugMessage("Submitting form")
+        submitForm()
+        console.log("✅ Submitting form")
+        return
       }
+    }
 
-      // Clear command
-      const clearPatterns = [
-        /(?:clear|reset|clear form|reset form|start over)/i,
-        /(?:clear all|reset all|clear everything)/i
-      ]
-      
-      for (const pattern of clearPatterns) {
-        if (pattern.test(lowerCommand)) {
-          addDebugMessage("Clearing form")
-          clearForm()
-          console.log("✅ Cleared form")
-          return
-        }
+    // Clear command
+    const clearPatterns = [
+      /(?:clear|reset|clear form|reset form|start over)/i,
+      /(?:clear all|reset all|clear everything)/i
+    ]
+    
+    for (const pattern of clearPatterns) {
+      if (pattern.test(lowerCommand)) {
+        addDebugMessage("Clearing form")
+        clearForm()
+        console.log("✅ Cleared form")
+        return
       }
     }
 
@@ -273,6 +273,7 @@ export default function Home() {
                 <MicStream 
                   onConnectionChange={setIsConnected} 
                   webSocketService={wsReady ? wsRef.current! : undefined}
+                  onVoiceCommand={processVoiceCommand}
                 />
               </CardContent>
             </Card>
@@ -285,7 +286,11 @@ export default function Home() {
                 <CardDescription>Fill out the form using voice commands like "My name is John"</CardDescription>
               </CardHeader>
               <CardContent>
-                <VoiceForm isConnected={isConnected} />
+                <VoiceForm 
+                  isConnected={isConnected} 
+                  webSocketService={wsReady ? wsRef.current! : undefined}
+                  onVoiceCommand={processVoiceCommand}
+                />
               </CardContent>
             </Card>
           </TabsContent>

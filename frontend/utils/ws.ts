@@ -23,16 +23,18 @@ export class WebSocketService {
 
   async connect(): Promise<void> {
     if (this.isConnecting || this.isConnected()) {
+      console.log("🔍 WebSocket already connecting or connected")
       return
     }
 
+    console.log("🔍 Attempting to connect to WebSocket:", this.url)
     this.isConnecting = true
 
     try {
       this.ws = new WebSocket(this.url)
 
       this.ws.onopen = () => {
-        console.log("WebSocket connected successfully to:", this.url)
+        console.log("✅ WebSocket connected successfully to:", this.url)
         this.isConnecting = false
         this.reconnectAttempts = 0
         this.onConnectionChange?.(true)
@@ -49,19 +51,21 @@ export class WebSocketService {
       }
 
       this.ws.onclose = (event) => {
-        console.log("WebSocket closed:", event.code, event.reason)
+        console.log("❌ WebSocket closed:", event.code, event.reason)
         this.isConnecting = false
         this.onConnectionChange?.(false)
 
         if (!event.wasClean && this.reconnectAttempts < this.maxReconnectAttempts) {
+          console.log("🔄 Scheduling reconnect...")
           this.scheduleReconnect()
         }
       }
 
       this.ws.onerror = (error) => {
-        console.error("WebSocket error:", error)
-        console.error("Failed to connect to:", this.url)
+        console.error("❌ WebSocket error:", error)
+        console.error("❌ Failed to connect to:", this.url)
         this.isConnecting = false
+        this.onConnectionChange?.(false)
         this.onError?.("Connection error")
       }
     } catch (error) {
@@ -103,6 +107,7 @@ export class WebSocketService {
           case "voice_command_response":
             // Handle voice command responses from backend
             console.log("🔔 WebSocket received voice command response:", message.response)
+            console.log("🔔 Calling onVoiceCommandResponse callback...")
             this.onVoiceCommandResponse?.(message.response)
             break
 
