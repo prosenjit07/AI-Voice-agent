@@ -11,105 +11,230 @@ export default function Home() {
   const [isConnected, setIsConnected] = useState(false)
   const [activeTab, setActiveTab] = useState("stream")
   const [wsReady, setWsReady] = useState(false)
+  const [debugMessages, setDebugMessages] = useState<string[]>([])
   const wsRef = useRef<WebSocketService | null>(null)
 
+  const addDebugMessage = (message: string) => {
+    console.log(`🔍 DEBUG: ${message}`)
+    setDebugMessages(prev => [...prev.slice(-9), message]) // Keep last 10 messages
+  }
+
   useEffect(() => {
+    addDebugMessage("Initializing WebSocket service...")
+    
     // Initialize WebSocket service for voice commands
     wsRef.current = new WebSocketService()
 
     wsRef.current.onConnectionChange = (connected) => {
+      addDebugMessage(`WebSocket connection changed: ${connected}`)
       setIsConnected(connected)
       if (connected) {
         setWsReady(true)
+        addDebugMessage("WebSocket is ready for voice commands")
       }
     }
 
-    wsRef.current.onTextReceived = (text) => {
-      processVoiceCommand(text)
-    }
-
+    // Only process voice commands from voice command responses, not from all text
     wsRef.current.onVoiceCommandResponse = (response) => {
+      addDebugMessage(`Received voice command response: ${JSON.stringify(response)}`)
       handleVoiceCommandResponse(response)
     }
 
     // Connect to WebSocket immediately
+    addDebugMessage("Attempting to connect to WebSocket...")
     wsRef.current.connect().catch((error) => {
+      addDebugMessage(`Failed to connect to WebSocket: ${error}`)
       console.error("Failed to connect to WebSocket:", error)
     })
 
     return () => {
+      addDebugMessage("Cleaning up WebSocket connection...")
       wsRef.current?.disconnect()
     }
   }, [])
 
+  // This function is now only called manually for testing or from actual voice input
   const processVoiceCommand = (command: string) => {
     const lowerCommand = command.toLowerCase()
-    console.log("Processing voice command:", command)
+    addDebugMessage(`Processing voice command: ${command}`)
 
     // Tab switching commands
     if (lowerCommand.includes("open voice form") || lowerCommand.includes("switch to form") || lowerCommand.includes("go to form")) {
+      addDebugMessage("Switching to Voice Form tab")
       setActiveTab("form")
-      console.log("Switching to Voice Form tab")
+      console.log("✅ Switching to Voice Form tab")
       return
     }
 
     if (lowerCommand.includes("open voice stream") || lowerCommand.includes("switch to stream") || lowerCommand.includes("go to stream")) {
+      addDebugMessage("Switching to Voice Stream tab")
       setActiveTab("stream")
-      console.log("Switching to Voice Stream tab")
+      console.log("✅ Switching to Voice Stream tab")
       return
     }
 
-    // Other voice commands can be added here
-    console.log("Unknown voice command:", command)
+    // Form field commands - only process if we're on the form tab
+    if (activeTab === "form") {
+      // Name extraction
+      const namePatterns = [
+        /(?:my name is|i am|i'm|name is|call me)\s+([a-zA-Z\s]+)/i,
+        /(?:set name to|put name as)\s+([a-zA-Z\s]+)/i,
+        /(?:name)\s+([a-zA-Z\s]+)/i
+      ]
+      
+      for (const pattern of namePatterns) {
+        const nameMatch = lowerCommand.match(pattern)
+        if (nameMatch) {
+          const name = nameMatch[1].trim()
+          addDebugMessage(`Setting name field to: ${name}`)
+          updateFormField("name", name)
+          console.log(`✅ Set name to: ${name}`)
+          return
+        }
+      }
+
+      // Email extraction
+      const emailPatterns = [
+        /(?:my email is|email is|my email address is|email address)\s+([^\s]+@[^\s]+\.[^\s]+)/i,
+        /(?:set email to|put email as)\s+([^\s]+@[^\s]+\.[^\s]+)/i,
+        /(?:email)\s+([^\s]+@[^\s]+\.[^\s]+)/i
+      ]
+      
+      for (const pattern of emailPatterns) {
+        const emailMatch = lowerCommand.match(pattern)
+        if (emailMatch) {
+          const email = emailMatch[1].trim()
+          addDebugMessage(`Setting email field to: ${email}`)
+          updateFormField("email", email)
+          console.log(`✅ Set email to: ${email}`)
+          return
+        }
+      }
+
+      // Message extraction
+      const messagePatterns = [
+        /(?:my message is|message is|i want to say|tell them)\s+(.+)/i,
+        /(?:set message to|put message as)\s+(.+)/i,
+        /(?:message)\s+(.+)/i
+      ]
+      
+      for (const pattern of messagePatterns) {
+        const messageMatch = lowerCommand.match(pattern)
+        if (messageMatch) {
+          const message = messageMatch[1].trim()
+          addDebugMessage(`Setting message field to: ${message}`)
+          updateFormField("message", message)
+          console.log(`✅ Set message to: ${message}`)
+          return
+        }
+      }
+
+      // Submit command
+      const submitPatterns = [
+        /(?:submit|send form|send it|submit form|send the form)/i,
+        /(?:i'm done|finished|complete|done)/i
+      ]
+      
+      for (const pattern of submitPatterns) {
+        if (pattern.test(lowerCommand)) {
+          addDebugMessage("Submitting form")
+          submitForm()
+          console.log("✅ Submitting form")
+          return
+        }
+      }
+
+      // Clear command
+      const clearPatterns = [
+        /(?:clear|reset|clear form|reset form|start over)/i,
+        /(?:clear all|reset all|clear everything)/i
+      ]
+      
+      for (const pattern of clearPatterns) {
+        if (pattern.test(lowerCommand)) {
+          addDebugMessage("Clearing form")
+          clearForm()
+          console.log("✅ Cleared form")
+          return
+        }
+      }
+    }
+
+    addDebugMessage(`No matching command found for: ${command}`)
+    console.log("❌ No matching command found for:", command)
+  }
+
+  const updateFormField = (field: string, value: string) => {
+    addDebugMessage(`Updating form field: ${field} = ${value}`)
+    const voiceForm = (window as any).voiceForm
+    if (voiceForm && voiceForm.updateField) {
+      voiceForm.updateField(field, value)
+      addDebugMessage(`Form field updated successfully`)
+    } else {
+      addDebugMessage(`VoiceForm not available for field update`)
+      console.warn("VoiceForm not available for field update")
+    }
+  }
+
+  const submitForm = () => {
+    addDebugMessage("Submitting form")
+    const voiceForm = (window as any).voiceForm
+    if (voiceForm && voiceForm.submitForm) {
+      voiceForm.submitForm()
+      addDebugMessage("Form submitted successfully")
+    } else {
+      addDebugMessage("VoiceForm not available for submission")
+      console.warn("VoiceForm not available for submission")
+    }
+  }
+
+  const clearForm = () => {
+    addDebugMessage("Clearing form")
+    const voiceForm = (window as any).voiceForm
+    if (voiceForm && voiceForm.clearForm) {
+      voiceForm.clearForm()
+      addDebugMessage("Form cleared successfully")
+    } else {
+      addDebugMessage("VoiceForm not available for clearing")
+      console.warn("VoiceForm not available for clearing")
+    }
   }
 
   const handleVoiceCommandResponse = (response: any) => {
+    addDebugMessage(`Handling voice command response: ${JSON.stringify(response)}`)
     console.log("🎯 Main page received voice command response:", response)
-    
-    // Get the voice form instance once
-    const voiceForm = (window as any).voiceForm
     
     switch (response.action) {
       case "switch_tab":
         if (response.tab === "form") {
+          addDebugMessage("Switching to form tab via response")
           setActiveTab("form")
-          console.log("Switched to form tab")
+          console.log("✅ Switched to form tab")
         } else if (response.tab === "stream") {
+          addDebugMessage("Switching to stream tab via response")
           setActiveTab("stream")
-          console.log("Switched to stream tab")
+          console.log("✅ Switched to stream tab")
         }
         break
         
       case "fill_field":
-        // Update the form field using the exposed method
-        if (voiceForm && voiceForm.updateField) {
-          voiceForm.updateField(response.field, response.value)
-          console.log(`Updated field ${response.field} with ${response.value}`)
-        } else {
-          console.log(`Field ${response.field} should be filled with ${response.value}`)
-        }
+        addDebugMessage(`Filling field via response: ${response.field} = ${response.value}`)
+        updateFormField(response.field, response.value)
         break
         
       case "submit_form":
-        if (voiceForm && voiceForm.submitForm) {
-          voiceForm.submitForm()
-          console.log("Form submitted")
-        } else {
-          console.log("Form should be submitted")
-        }
+        addDebugMessage("Submitting form via response")
+        submitForm()
         break
         
       case "clear_form":
-        if (voiceForm && voiceForm.clearForm) {
-          voiceForm.clearForm()
-          console.log("Form cleared")
-        } else {
-          console.log("Form should be cleared")
-        }
+        addDebugMessage("Clearing form via response")
+        clearForm()
         break
         
       default:
-        console.log("Unknown action:", response.action)
+        addDebugMessage(`Unknown action in response: ${response.action}`)
+        console.log("❌ Unknown action:", response.action)
     }
   }
 
@@ -147,7 +272,7 @@ export default function Home() {
               <CardContent>
                 <MicStream 
                   onConnectionChange={setIsConnected} 
-                  webSocketService={wsReady ? wsRef.current : undefined}
+                  webSocketService={wsReady ? wsRef.current! : undefined}
                 />
               </CardContent>
             </Card>
@@ -166,38 +291,60 @@ export default function Home() {
           </TabsContent>
         </Tabs>
 
-                  <div className="mt-8 text-center space-y-4">
-            <div
-              className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                isConnected ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-              }`}
+        <div className="mt-8 text-center space-y-4">
+          <div
+            className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+              isConnected ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+            }`}
+          >
+            <div className={`w-2 h-2 rounded-full mr-2 ${isConnected ? "bg-green-500" : "bg-red-500"}`} />
+            {isConnected ? "Connected" : "Disconnected"}
+          </div>
+          
+          {/* Test buttons for voice commands */}
+          <div className="flex justify-center space-x-2">
+            <button
+              onClick={() => {
+                addDebugMessage("Test button clicked: Open Form")
+                wsRef.current?.sendText("open voice form")
+                processVoiceCommand("open voice form")
+              }}
+              className="px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600"
             >
-              <div className={`w-2 h-2 rounded-full mr-2 ${isConnected ? "bg-green-500" : "bg-red-500"}`} />
-              {isConnected ? "Connected" : "Disconnected"}
-            </div>
-            
-            {/* Test buttons for voice commands */}
-            <div className="flex justify-center space-x-2">
-              <button
-                onClick={() => wsRef.current?.sendText("open voice form")}
-                className="px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600"
-              >
-                Test: Open Form
-              </button>
-              <button
-                onClick={() => wsRef.current?.sendText("my name is John Doe")}
-                className="px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600"
-              >
-                Test: Set Name
-              </button>
-              <button
-                onClick={() => wsRef.current?.sendText("my email is john@example.com")}
-                className="px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600"
-              >
-                Test: Set Email
-              </button>
+              Test: Open Form
+            </button>
+            <button
+              onClick={() => {
+                addDebugMessage("Test button clicked: Set Name")
+                wsRef.current?.sendText("my name is John Doe")
+                processVoiceCommand("my name is John Doe")
+              }}
+              className="px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600"
+            >
+              Test: Set Name
+            </button>
+            <button
+              onClick={() => {
+                addDebugMessage("Test button clicked: Set Email")
+                wsRef.current?.sendText("my email is john@example.com")
+                processVoiceCommand("my email is john@example.com")
+              }}
+              className="px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600"
+            >
+              Test: Set Email
+            </button>
+          </div>
+
+          {/* Debug messages */}
+          <div className="mt-4 p-4 bg-gray-100 rounded-lg border">
+            <h4 className="font-semibold text-gray-800 mb-2">Debug Messages:</h4>
+            <div className="text-xs text-gray-600 space-y-1 max-h-32 overflow-y-auto">
+              {debugMessages.map((msg, index) => (
+                <div key={index} className="font-mono">{msg}</div>
+              ))}
             </div>
           </div>
+        </div>
       </div>
     </main>
   )

@@ -293,24 +293,26 @@ async def handle_text_message(data: Dict[str, Any], pipeline: LowLatencyAudioPip
             # Handle text input
             text = data.get("text", "")
             if text:
-                # Process voice commands locally
+                # Process voice commands locally first
                 response = await process_voice_command(text)
-                logger.info(f"Sending voice command response: {response}")
+                logger.info(f"Processing voice command: {text} -> {response}")
+                
+                # Send voice command response
                 await websocket.send_json({
                     "type": "voice_command_response",
                     "command": text,
                     "response": response,
                     "timestamp": asyncio.get_event_loop().time()
                 })
-                logger.info("Voice command response sent successfully")
                 
                 # Only send to Gemini if the local command wasn't recognized
-                if not response or response.get("action") == "unknown":
+                if response.get("action") == "unknown":
                     logger.info("Local command not recognized, sending to Gemini")
                     await pipeline.process_text_input(text)
                 else:
                     logger.info("Local command recognized, skipping Gemini")
                 
+                # Send text received confirmation
                 await websocket.send_json({
                     "type": "text_received",
                     "text": text,

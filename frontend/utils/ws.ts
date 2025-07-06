@@ -73,17 +73,18 @@ export class WebSocketService {
 
   private handleMessage(event: MessageEvent) {
     try {
-      console.log("Received WebSocket message:", event.data)
+      console.log("🔍 WebSocket received raw message:", event.data)
       
       if (event.data instanceof ArrayBuffer) {
         // Handle binary audio data
+        console.log("🔍 Received binary audio data")
         this.onAudioReceived?.(event.data)
         return
       }
 
       if (typeof event.data === "string") {
         const message: RTVIMessage = JSON.parse(event.data)
-        console.log("Parsed message:", message)
+        console.log("🔍 Parsed WebSocket message:", message)
 
         switch (message.type) {
           case "audio":
@@ -95,6 +96,7 @@ export class WebSocketService {
             break
 
           case "text":
+            console.log("🔍 Received text message:", message.data)
             this.onTextReceived?.(message.data)
             break
 
@@ -105,23 +107,24 @@ export class WebSocketService {
             break
 
           case "connection_established":
-            console.log("Connection established:", message)
+            console.log("🔍 Connection established:", message)
             break
 
           case "text_received":
-            console.log("Text received confirmation:", message.text)
+            console.log("🔍 Text received confirmation:", message.text)
             break
 
           case "error":
+            console.log("🔍 Error message:", message.data)
             this.onError?.(message.data)
             break
 
           default:
-            console.log("Unknown message type:", message.type)
+            console.log("🔍 Unknown message type:", message.type, message)
         }
       }
     } catch (error) {
-      console.error("Error handling message:", error)
+      console.error("❌ Error handling WebSocket message:", error)
     }
   }
 

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Test</title>
+</head>
+<body>
+    <h1>WebSocket Connection Test</h1>
+    <div id="status">Connecting...</div>
+    <div id="messages"></div>
+    
+    <button onclick="sendTestCommand()">Send Test Command</button>
+    
+    <script>
+        const statusDiv = document.getElementById('status');
+        const messagesDiv = document.getElementById('messages');
+        
+        function addMessage(message) {
+            const div = document.createElement('div');
+            div.textContent = new Date().toLocaleTimeString() + ': ' + message;
+            messagesDiv.appendChild(div);
+            console.log(message);
+        }
+        
+        const ws = new WebSocket('ws://localhost:5050/ws');
+        
+        ws.onopen = function(event) {
+            statusDiv.textContent = 'Connected';
+            statusDiv.style.color = 'green';
+            addMessage('WebSocket connected');
+        };
+        
+        ws.onmessage = function(event) {
+            addMessage('Received: ' + event.data);
+        };
+        
+        ws.onclose = function(event) {
+            statusDiv.textContent = 'Disconnected';
+            statusDiv.style.color = 'red';
+            addMessage('WebSocket closed: ' + event.code + ' ' + event.reason);
+        };
+        
+        ws.onerror = function(error) {
+            statusDiv.textContent = 'Error';
+            statusDiv.style.color = 'red';
+            addMessage('WebSocket error: ' + error);
+        };
+        
+        function sendTestCommand() {
+            const message = {
+                type: "text_input",
+                text: "open voice form",
+                timestamp: Date.now()
+            };
+            ws.send(JSON.stringify(message));
+            addMessage('Sent: ' + JSON.stringify(message));
+        }
+    </script>
+</body>
+</html> 

@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     chunk_size: int = 512
     
     # Gemini Configuration
-    gemini_model: str = "gemini-2.0-flash-live-preview-04-09"
+    gemini_model: str = "gemini-2.0-flash-exp"
     gemini_voice: str = "Aoede"
     max_session_duration: int = 600  # 10 minutes
     
