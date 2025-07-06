@@ -29,62 +29,138 @@ export function VoiceForm({ isConnected }: VoiceFormProps) {
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [lastCommand, setLastCommand] = useState("")
 
-  const wsRef = useRef<WebSocketService | null>(null)
+  // Expose methods to parent component
+  const updateField = (field: keyof FormData, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }))
+  }
 
+  const submitForm = () => {
+    handleSubmit()
+  }
+
+  const clearForm = () => {
+    setFormData({ name: "", email: "", message: "" })
+  }
+
+  // Expose these methods globally for the parent component to use
   useEffect(() => {
-    if (isConnected) {
-      wsRef.current = new WebSocketService()
-
-      wsRef.current.onTextReceived = (text) => {
-        processVoiceCommand(text)
-        setLastCommand(text)
-      }
-
-      wsRef.current.connect()
+    ;(window as any).voiceForm = {
+      updateField,
+      submitForm,
+      clearForm
     }
-
-    return () => {
-      wsRef.current?.disconnect()
-    }
-  }, [isConnected])
+  }, [])
 
   const processVoiceCommand = (command: string) => {
     const lowerCommand = command.toLowerCase()
+    console.log("VoiceForm processing command:", command)
 
-    // Name extraction
-    const nameMatch = lowerCommand.match(/(?:my name is|i am|i'm|name is)\s+([a-zA-Z\s]+)/i)
-    if (nameMatch) {
-      const name = nameMatch[1].trim()
-      setFormData((prev) => ({ ...prev, name }))
-      return
+    // Name extraction - more flexible patterns
+    const namePatterns = [
+      /(?:my name is|i am|i'm|name is|call me)\s+([a-zA-Z\s]+)/i,
+      /(?:set name to|put name as)\s+([a-zA-Z\s]+)/i,
+      /(?:name)\s+([a-zA-Z\s]+)/i
+    ]
+    
+    for (const pattern of namePatterns) {
+      const nameMatch = lowerCommand.match(pattern)
+      if (nameMatch) {
+        const name = nameMatch[1].trim()
+        setFormData((prev) => ({ ...prev, name }))
+        console.log("Set name to:", name)
+        return
+      }
     }
 
-    // Email extraction
-    const emailMatch = lowerCommand.match(/(?:my email is|email is|my email address is)\s+([^\s]+@[^\s]+\.[^\s]+)/i)
-    if (emailMatch) {
-      const email = emailMatch[1].trim()
-      setFormData((prev) => ({ ...prev, email }))
-      return
+    // Email extraction - more flexible patterns
+    const emailPatterns = [
+      /(?:my email is|email is|my email address is|email address)\s+([^\s]+@[^\s]+\.[^\s]+)/i,
+      /(?:set email to|put email as)\s+([^\s]+@[^\s]+\.[^\s]+)/i,
+      /(?:email)\s+([^\s]+@[^\s]+\.[^\s]+)/i
+    ]
+    
+    for (const pattern of emailPatterns) {
+      const emailMatch = lowerCommand.match(pattern)
+      if (emailMatch) {
+        const email = emailMatch[1].trim()
+        setFormData((prev) => ({ ...prev, email }))
+        console.log("Set email to:", email)
+        return
+      }
     }
 
-    // Message extraction
-    const messageMatch = lowerCommand.match(/(?:my message is|message is|i want to say)\s+(.+)/i)
-    if (messageMatch) {
-      const message = messageMatch[1].trim()
-      setFormData((prev) => ({ ...prev, message }))
-      return
+    // Message extraction - more flexible patterns
+    const messagePatterns = [
+      /(?:my message is|message is|i want to say|tell them)\s+(.+)/i,
+      /(?:set message to|put message as)\s+(.+)/i,
+      /(?:message)\s+(.+)/i
+    ]
+    
+    for (const pattern of messagePatterns) {
+      const messageMatch = lowerCommand.match(pattern)
+      if (messageMatch) {
+        const message = messageMatch[1].trim()
+        setFormData((prev) => ({ ...prev, message }))
+        console.log("Set message to:", message)
+        return
+      }
     }
 
-    // Submit command
-    if (lowerCommand.includes("submit") || lowerCommand.includes("send form") || lowerCommand.includes("send it")) {
-      handleSubmit()
-      return
+    // Submit command - more variations
+    const submitPatterns = [
+      /(?:submit|send form|send it|submit form|send the form)/i,
+      /(?:i'm done|finished|complete|done)/i
+    ]
+    
+    for (const pattern of submitPatterns) {
+      if (pattern.test(lowerCommand)) {
+        handleSubmit()
+        console.log("Submitting form")
+        return
+      }
     }
 
-    // Clear command
-    if (lowerCommand.includes("clear") || lowerCommand.includes("reset")) {
-      setFormData({ name: "", email: "", message: "" })
-      return
+    // Clear command - more variations
+    const clearPatterns = [
+      /(?:clear|reset|clear form|reset form|start over)/i,
+      /(?:clear all|reset all|clear everything)/i
+    ]
+    
+    for (const pattern of clearPatterns) {
+      if (pattern.test(lowerCommand)) {
+        setFormData({ name: "", email: "", message: "" })
+        console.log("Cleared form")
+        return
+      }
+    }
+
+    console.log("No matching command found for:", command)
+  }
+
+  const handleVoiceCommandResponse = (response: any) => {
+    console.log("VoiceForm handling voice command response:", response)
+    
+    switch (response.action) {
+      case "fill_field":
+        if (response.field === "name") {
+          setFormData((prev) => ({ ...prev, name: response.value }))
+        } else if (response.field === "email") {
+          setFormData((prev) => ({ ...prev, email: response.value }))
+        } else if (response.field === "message") {
+          setFormData((prev) => ({ ...prev, message: response.value }))
+        }
+        break
+        
+      case "submit_form":
+        handleSubmit()
+        break
+        
+      case "clear_form":
+        setFormData({ name: "", email: "", message: "" })
+        break
+        
+      default:
+        console.log("Unknown action in VoiceForm:", response.action)
     }
   }
 

@@ -1,6 +1,8 @@
 export interface RTVIMessage {
-  type: "audio" | "text" | "control" | "error"
+  type: "audio" | "text" | "control" | "error" | "voice_command_response" | "text_received" | "connection_established"
   data?: any
+  response?: any
+  text?: string
   timestamp?: number
 }
 
@@ -14,9 +16,10 @@ export class WebSocketService {
   public onConnectionChange?: (connected: boolean) => void
   public onAudioReceived?: (audioData: ArrayBuffer) => void
   public onTextReceived?: (text: string) => void
+  public onVoiceCommandResponse?: (response: any) => void
   public onError?: (error: string) => void
 
-  constructor(private url = "ws://localhost:8000/ws") {}
+  constructor(private url = "ws://localhost:5050/ws") {}
 
   async connect(): Promise<void> {
     if (this.isConnecting || this.isConnected()) {
@@ -29,7 +32,7 @@ export class WebSocketService {
       this.ws = new WebSocket(this.url)
 
       this.ws.onopen = () => {
-        console.log("WebSocket connected")
+        console.log("WebSocket connected successfully to:", this.url)
         this.isConnecting = false
         this.reconnectAttempts = 0
         this.onConnectionChange?.(true)
@@ -57,6 +60,7 @@ export class WebSocketService {
 
       this.ws.onerror = (error) => {
         console.error("WebSocket error:", error)
+        console.error("Failed to connect to:", this.url)
         this.isConnecting = false
         this.onError?.("Connection error")
       }
@@ -69,6 +73,8 @@ export class WebSocketService {
 
   private handleMessage(event: MessageEvent) {
     try {
+      console.log("Received WebSocket message:", event.data)
+      
       if (event.data instanceof ArrayBuffer) {
         // Handle binary audio data
         this.onAudioReceived?.(event.data)
@@ -77,6 +83,7 @@ export class WebSocketService {
 
       if (typeof event.data === "string") {
         const message: RTVIMessage = JSON.parse(event.data)
+        console.log("Parsed message:", message)
 
         switch (message.type) {
           case "audio":
@@ -89,6 +96,20 @@ export class WebSocketService {
 
           case "text":
             this.onTextReceived?.(message.data)
+            break
+
+          case "voice_command_response":
+            // Handle voice command responses from backend
+            console.log("Voice command response received:", message.response)
+            this.onVoiceCommandResponse?.(message.response)
+            break
+
+          case "connection_established":
+            console.log("Connection established:", message)
+            break
+
+          case "text_received":
+            console.log("Text received confirmation:", message.text)
             break
 
           case "error":
@@ -140,7 +161,9 @@ export class WebSocketService {
     }
 
     try {
-      this.ws!.send(JSON.stringify(message))
+      const messageStr = JSON.stringify(message)
+      console.log("Sending WebSocket message:", messageStr)
+      this.ws!.send(messageStr)
     } catch (error) {
       console.error("Error sending message:", error)
     }
@@ -160,11 +183,13 @@ export class WebSocketService {
   }
 
   sendText(text: string): void {
-    this.send({
-      type: "text",
-      data: text,
+    const message = {
+      type: "text_input",
+      text: text,
       timestamp: Date.now(),
-    })
+    }
+    console.log("Sending text message:", message)
+    this.send(message)
   }
 
   isConnected(): boolean {

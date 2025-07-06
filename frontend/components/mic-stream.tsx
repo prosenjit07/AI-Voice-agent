@@ -65,6 +65,12 @@ export function MicStream({ onConnectionChange }: MicStreamProps) {
       setIsPlaying(false)
     }
 
+    // Connect to WebSocket immediately
+    console.log("Attempting to connect to WebSocket...")
+    wsRef.current.connect().catch((error) => {
+      console.error("Failed to connect to WebSocket:", error)
+    })
+
     return () => {
       stopRecording()
       wsRef.current?.disconnect()
@@ -85,12 +91,29 @@ export function MicStream({ onConnectionChange }: MicStreamProps) {
 
   const startRecording = async () => {
     try {
-      if (!wsRef.current?.isConnected()) {
-        await wsRef.current?.connect()
-      }
-
       await audioProcessorRef.current?.startRecording()
       setIsRecording(true)
+      
+      // For testing: simulate voice commands after a delay
+      setTimeout(() => {
+        if (wsRef.current) {
+          // Simulate some test commands
+          const testCommands = [
+            "open voice form",
+            "my name is John Doe",
+            "my email is john@example.com",
+            "my message is Hello world"
+          ]
+          
+          testCommands.forEach((command, index) => {
+            setTimeout(() => {
+              // Send the command to the backend
+              wsRef.current?.sendText(command)
+            }, (index + 1) * 2000) // Send commands 2 seconds apart
+          })
+        }
+      }, 3000) // Start after 3 seconds
+      
     } catch (error) {
       console.error("Failed to start recording:", error)
       alert("Failed to access microphone. Please check permissions.")
