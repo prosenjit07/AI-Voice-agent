@@ -268,16 +268,23 @@ export function VoiceForm({ isConnected, webSocketService, onVoiceCommand }: Voi
       {/* Voice Input Section */}
       <Card className="bg-blue-50 border-blue-200">
         <CardContent className="pt-6">
-          <div className="flex flex-col items-center space-y-4">
+          <div className="flex flex-col items-center gap-5">
             <Button
               onClick={toggleListening}
               disabled={!isConnected}
-              size="lg"
-              className={`w-16 h-16 rounded-full transition-all duration-200 ${
-                isListening ? "bg-red-500 hover:bg-red-600 animate-pulse" : "bg-blue-500 hover:bg-blue-600"
+              size="icon"
+              className={`w-20 h-20 shadow-lg border-2 border-transparent focus:ring-4 focus:ring-blue-300 transition-all duration-200 ${
+                isListening
+                  ? "bg-gradient-to-tr from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 animate-pulse"
+                  : "bg-gradient-to-tr from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600"
               }`}
+              aria-label={isListening ? "Stop listening" : "Start listening"}
             >
-              {isListening ? <MicOff className="w-6 h-6 text-white" /> : <Mic className="w-6 h-6 text-white" />}
+              {isListening ? (
+                <MicOff className="w-8 h-8 text-white drop-shadow" />
+              ) : (
+                <Mic className="w-8 h-8 text-white drop-shadow" />
+              )}
             </Button>
 
             <div className="text-center">

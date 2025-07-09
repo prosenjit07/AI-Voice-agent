@@ -70,8 +70,7 @@ yarn install
 
 ### 1. Start the Backend
 ```bash
-cd backend
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+cd backend && uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ### 2. Start the Frontend
